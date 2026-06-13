@@ -1,0 +1,72 @@
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <semaphore.h>
+ 
+#define NUM_INCREMENTS  1000
+#define NUM_THREADS     2
+
+static long     counter = 0;
+static sem_t    counter_sem;   /* binary semaphore acting as a mutex */
+ 
+void *increment_counter(void *arg)
+{
+    int thread_id = *((int *)arg);
+    int i;
+ 
+    for (i = 0; i < NUM_INCREMENTS; i++) {
+        sem_wait(&counter_sem);   /* lock — only one thread enters here */
+        counter++;
+        sem_post(&counter_sem);   /* unlock */
+    }
+ 
+    printf("[Thread %d] Done incrementing.\n", thread_id);
+    return NULL;
+}
+ 
+int main(void)
+{
+    pthread_t threads[NUM_THREADS];
+    int       ids[NUM_THREADS];
+    int       i;
+ 
+  
+    if (sem_init(&counter_sem, 0, 1) != 0) {
+        perror("sem_init failed");
+        exit(EXIT_FAILURE);
+    }
+ 
+    printf("Starting counter at: %ld\n", counter);
+    printf("Launching %d threads, each doing %d increments...\n\n",
+           NUM_THREADS, NUM_INCREMENTS);
+ 
+   
+    for (i = 0; i < NUM_THREADS; i++) {
+        ids[i] = i + 1;
+        if (pthread_create(&threads[i], NULL, increment_counter, &ids[i]) != 0) {
+            perror("pthread_create failed");
+            exit(EXIT_FAILURE);
+        }
+    }
+ 
+
+    for (i = 0; i < NUM_THREADS; i++) {
+        pthread_join(threads[i], NULL);
+    }
+ 
+
+    sem_destroy(&counter_sem);
+ 
+    printf("\nFinal counter value : %ld\n", counter);
+    printf("Expected            : %d\n", NUM_THREADS * NUM_INCREMENTS);
+ 
+    if (counter == NUM_THREADS * NUM_INCREMENTS) {
+        printf("Result: PASS — semaphore synchronisation worked correctly.\n");
+    } else {
+        printf("Result: FAIL — race condition detected!\n");
+    }
+ 
+    return 0;
+}
+ 
