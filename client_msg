@@ -1,0 +1,98 @@
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <mqueue.h>
+ 
+#define SERVER_QUEUE
+#define CLIENT_QUEUE
+#define MAX_MSG_SIZE  
+#define QUEUE_PERMS
+ 
+typedef struct {
+    int  number;
+    int  result;
+} Message;
+ 
+int main(int argc, char *argv[])
+{
+    mqd_t           server_q, client_q;
+    struct mq_attr  attr;
+    Message         msg;
+    int             number;
+ 
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <integer>\n", argv[0]);
+        fprintf(stderr, "Example: %s 7\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+ 
+    number = atoi(argv[1]);
+ 
+
+    attr.mq_flags   = 0;
+    attr.mq_maxmsg  = 10;
+    attr.mq_msgsize = sizeof(Message);
+    attr.mq_curmsgs = 0;
+
+    client_q = mq_open(CLIENT_QUEUE,
+                       O_CREAT | O_RDONLY,
+                       QUEUE_PERMS,
+                       &attr);
+    if (client_q == (mqd_t)-1) {
+        perror("mq_open client reply queue failed");
+        exit(EXIT_FAILURE);
+    }
+ 
+
+    server_q = mq_open(SERVER_QUEUE, O_WRONLY);
+    if (server_q == (mqd_t)-1) {
+        perror("mq_open server queue failed — is the server running?");
+        mq_close(client_q);
+        mq_unlink(CLIENT_QUEUE);
+        exit(EXIT_FAILURE);
+    }
+ 
+ 
+    memset(&msg, 0, sizeof(msg));
+    msg.number = number;
+ 
+    printf("[Client] Sending number %d to server...\n", number);
+ 
+    if (mq_send(server_q, (char *)&msg, sizeof(Message), 0) < 0) {
+        perror("mq_send failed");
+        mq_close(server_q);
+        mq_close(client_q);
+        mq_unlink(CLIENT_QUEUE);
+        exit(EXIT_FAILURE);
+    }
+ 
+    mq_close(server_q);
+ 
+ 
+    printf("[Client] Waiting for reply...\n");
+ 
+    if (mq_receive(client_q, (char *)&msg, sizeof(Message), NULL) < 0) {
+        perror("mq_receive reply failed");
+        mq_close(client_q);
+        mq_unlink(CLIENT_QUEUE);
+        exit(EXIT_FAILURE);
+    }
+ 
+    printf("[Client] Square of %d = %d\n", number, msg.result);
+ 
+  
+    mq_close(client_q);
+    mq_unlink(CLIENT_QUEUE);
+ 
+    server_q = mq_open(SERVER_QUEUE, O_WRONLY);
+    if (server_q != (mqd_t)-1) {
+        memset(&msg, 0, sizeof(msg));
+        msg.number = -1;
+        mq_send(server_q, (char *)&msg, sizeof(Message), 0);
+        mq_close(server_q);
+        printf("[Client] Sent shutdown signal to server.\n");
+    }
+ 
+    return 0;
+}
