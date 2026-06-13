@@ -1,0 +1,75 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <sys/wait.h>
+
+void *print_numbers(void *arg)
+{
+    int i;
+    for (i = 1; i <= 5; i++) {
+        printf("[Thread-Numbers] %d\n", i);
+        fflush(stdout);
+    }
+    return NULL;
+}
+
+
+void *print_alphabets(void *arg)
+{
+    char c;
+    for (c = 'A'; c <= 'E'; c++) {
+        printf("[Thread-Alphabets] %c\n", c);
+        fflush(stdout);
+    }
+    return NULL;
+}
+
+int main(void)
+{
+    pid_t child_pid;
+
+    printf("[Parent] My PID is: %d\n", getpid());
+
+    child_pid = fork();
+
+    if (child_pid < 0) {
+        perror("fork failed");
+        exit(EXIT_FAILURE);
+    }
+
+ 
+    if (child_pid == 0) {
+        pthread_t t1, t2;
+
+        printf("[Child] My PID is: %d  |  Parent PID: %d\n",
+               getpid(), getppid());
+
+        if (pthread_create(&t1, NULL, print_numbers, NULL) != 0) {
+            perror("pthread_create t1 failed");
+            exit(EXIT_FAILURE);
+        }
+
+        if (pthread_create(&t2, NULL, print_alphabets, NULL) != 0) {
+            perror("pthread_create t2 failed");
+            exit(EXIT_FAILURE);
+        }
+
+       
+        pthread_join(t1, NULL);
+        pthread_join(t2, NULL);
+
+        printf("[Child] Both threads finished. Exiting child.\n");
+        exit(EXIT_SUCCESS);
+    }
+
+
+    printf("[Parent] Spawned child with PID: %d\n", child_pid);
+    printf("[Parent] Waiting for child to finish...\n");
+
+    wait(NULL);   /* wait for child to exit */
+
+    printf("[Parent] Child finished. Parent exiting.\n");
+
+    return 0;
+}
